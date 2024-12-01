@@ -93,15 +93,26 @@ func (w *S3WAL) Read(ctx context.Context, offset uint64) (Record, error) {
 	}
 	defer result.Body.Close()
 
-	data, _ := io.ReadAll(result.Body)
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		return Record{}, fmt.Errorf("failed to read object body: %w", err)
+	}
 	if len(data) < 40 {
 		return Record{}, fmt.Errorf("invalid record: data too short")
+	}
+
+	var storedOffset uint64
+	if err = binary.Read(bytes.NewReader(data[:8]), binary.BigEndian, &storedOffset); err != nil {
+		return Record{}, err
+	}
+	if storedOffset != offset {
+		return Record{}, fmt.Errorf("offset mismatch: expected %d, got %d", offset, storedOffset)
 	}
 	if !validateChecksum(data) {
 		return Record{}, fmt.Errorf("checksum mismatch")
 	}
 	return Record{
-		Offset: offset,
+		Offset: storedOffset,
 		Data:   data[8 : len(data)-32],
 	}, nil
 }
