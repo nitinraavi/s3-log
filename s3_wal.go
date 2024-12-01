@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -33,6 +34,13 @@ func (w *S3WAL) getObjectKey(offset uint64) string {
 
 func calculateChecksum(buf *bytes.Buffer) [32]byte {
 	return sha256.Sum256(buf.Bytes())
+}
+
+func validateChecksum(data []byte) bool {
+	var storedChecksum [32]byte
+	copy(storedChecksum[:], data[len(data)-32:])
+	recordData := data[:len(data)-32]
+	return storedChecksum == calculateChecksum(bytes.NewBuffer(recordData))
 }
 
 func prepareBody(offset uint64, data []byte) ([]byte, error) {
@@ -70,4 +78,30 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	}
 	w.length = nextOffset
 	return nextOffset, nil
+}
+
+func (w *S3WAL) Read(ctx context.Context, offset uint64) (Record, error) {
+	key := w.getObjectKey(offset)
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(w.bucketName),
+		Key:    aws.String(key),
+	}
+
+	result, err := w.client.GetObject(ctx, input)
+	if err != nil {
+		return Record{}, fmt.Errorf("failed to get object from S3: %w", err)
+	}
+	defer result.Body.Close()
+
+	data, _ := io.ReadAll(result.Body)
+	if len(data) < 40 {
+		return Record{}, fmt.Errorf("invalid record: data too short")
+	}
+	if !validateChecksum(data) {
+		return Record{}, fmt.Errorf("checksum mismatch")
+	}
+	return Record{
+		Offset: offset,
+		Data:   data[8 : len(data)-32],
+	}, nil
 }
