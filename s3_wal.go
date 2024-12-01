@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -30,6 +31,12 @@ func NewS3WAL(client *s3.Client, bucketName, prefix string) *S3WAL {
 
 func (w *S3WAL) getObjectKey(offset uint64) string {
 	return w.prefix + "/" + fmt.Sprintf("%020d", offset)
+}
+
+func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
+	// skip the `w.prefix` and "/"
+	numStr := key[len(w.prefix)+1:]
+	return strconv.ParseUint(numStr, 10, 64)
 }
 
 func calculateChecksum(buf *bytes.Buffer) [32]byte {
@@ -115,4 +122,35 @@ func (w *S3WAL) Read(ctx context.Context, offset uint64) (Record, error) {
 		Offset: storedOffset,
 		Data:   data[8 : len(data)-32],
 	}, nil
+}
+
+func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(w.bucketName),
+		Prefix: aws.String(w.prefix + "/"),
+	}
+	paginator := s3.NewListObjectsV2Paginator(w.client, input)
+
+	var maxOffset uint64 = 0
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return Record{}, fmt.Errorf("failed to list objects from S3: %w", err)
+		}
+		for _, obj := range output.Contents {
+			key := *obj.Key
+			offset, err := w.getOffsetFromKey(key)
+			if err != nil {
+				return Record{}, fmt.Errorf("failed to parse offset from key: %w", err)
+			}
+			if offset > maxOffset {
+				maxOffset = offset
+			}
+		}
+	}
+	if maxOffset == 0 {
+		return Record{}, fmt.Errorf("WAL is empty")
+	}
+	w.length = maxOffset
+	return w.Read(ctx, maxOffset)
 }
