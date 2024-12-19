@@ -72,6 +72,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	defer w.mu.Unlock()
 	nextOffset := w.length + 1
 	// nextOffset := atomic.AddUint64(&w.length, 1) // Atomic increment
+	// https://stackoverflow.com/questions/15056237/which-is-more-efficient-basic-mutex-lock-or-atomic-integer
 	// w.mu.Unlock()
 
 	buf, err := prepareBody(nextOffset, data)
