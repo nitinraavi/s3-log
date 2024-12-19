@@ -9,7 +9,6 @@ import (
 	"io"
 	"strconv"
 	"sync"
-	"sync/atomic"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -71,8 +70,8 @@ func prepareBody(offset uint64, data []byte) ([]byte, error) {
 
 func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	m.Lock()
-	// nextOffset := w.length + 1
-	nextOffset := atomic.AddUint64(&w.length, 1) // Atomic increment
+	nextOffset := w.length + 1
+	// nextOffset := atomic.AddUint64(&w.length, 1) // Atomic increment
 	m.Unlock()
 
 	buf, err := prepareBody(nextOffset, data)
