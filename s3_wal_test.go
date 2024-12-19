@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -142,15 +143,27 @@ func TestAppendMultiple(t *testing.T) {
 		[]byte("Do not answer."),
 	}
 
-	var offsets []uint64
-	for _, data := range testData {
-		offset, err := wal.Append(ctx, data)
-		if err != nil {
-			t.Fatalf("failed to append: %v", err)
-		}
-		offsets = append(offsets, offset)
+	var wg sync.WaitGroup
+	offsets := make([]uint64, len(testData)) // Pre-allocate the offsets slice
+
+	for i, data := range testData {
+		wg.Add(1)
+		go func(i int, data []byte) {
+			defer wg.Done()
+
+			offset, err := wal.Append(ctx, data)
+			if err != nil {
+				t.Errorf("failed to append data %d: %v", i, err)
+				return // Exit the goroutine on error
+			}
+			offsets[i] = offset
+		}(i, data)
 	}
 
+	// Wait for all goroutines to finish appending
+	wg.Wait()
+
+	// Now read and verify data
 	for i, offset := range offsets {
 		record, err := wal.Read(ctx, offset)
 		if err != nil {
