@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
+
+var m sync.Mutex
 
 type S3WAL struct {
 	client     *s3.Client
@@ -66,7 +69,9 @@ func prepareBody(offset uint64, data []byte) ([]byte, error) {
 }
 
 func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
+	m.Lock()
 	nextOffset := w.length + 1
+	m.Unlock()
 
 	buf, err := prepareBody(nextOffset, data)
 	if err != nil {
@@ -83,7 +88,9 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	if _, err = w.client.PutObject(ctx, input); err != nil {
 		return 0, fmt.Errorf("failed to put object to S3: %w", err)
 	}
+	m.Lock()
 	w.length = nextOffset
+	m.Unlock()
 	return nextOffset, nil
 }
 
