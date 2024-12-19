@@ -2,12 +2,13 @@ package s3_log
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -136,17 +137,23 @@ func TestAppendMultiple(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	testData := [][]byte{
-		[]byte("Do not answer. Do not answer. Do not answer."),
-		[]byte("I am a pacifist in this world. You are lucky that I am first to receive your message."),
-		[]byte("I am warning you: do not answer. If you respond, we will come. Your world will be conquered"),
-		[]byte("Do not answer."),
+	// Random data generation
+	numData := 100
+	data := make([][]byte, numData)
+	rand.Seed(time.Now().UnixNano()) // Seed the random number generator
+
+	for i := range data {
+		dataLen := rand.Intn(100) + 1 // Generate random data length between 1 and 100
+		data[i] = make([]byte, dataLen)
+		for j := range data[i] {
+			data[i][j] = byte(rand.Intn(256)) // Generate random byte values
+		}
 	}
 
 	var wg sync.WaitGroup
-	offsets := make([]uint64, len(testData)) // Pre-allocate the offsets slice
+	offsets := make([]uint64, len(data)) // Pre-allocate the offsets slice
 
-	for i, data := range testData {
+	for i, data := range data {
 		wg.Add(1)
 		go func(i int, data []byte) {
 			defer wg.Done()
@@ -174,9 +181,9 @@ func TestAppendMultiple(t *testing.T) {
 			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
 		}
 
-		if string(record.Data) != string(testData[i]) {
+		if string(record.Data) != string(data[i]) {
 			t.Errorf("data mismatch at offset %d: expected %q, got %q",
-				offset, testData[i], record.Data)
+				offset, data[i], record.Data)
 		}
 	}
 }
