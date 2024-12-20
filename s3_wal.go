@@ -71,19 +71,13 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	w.mu.Lock() // Acquire the lock
 	defer w.mu.Unlock()
 	nextOffset := w.length + 1
-	// nextOffset := atomic.AddUint64(&w.length, 1) // Atomic increment
-	// https://stackoverflow.com/questions/15056237/which-is-more-efficient-basic-mutex-lock-or-atomic-integer
-	// w.mu.Unlock()
-
 	buf, err := prepareBody(nextOffset, data)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare object body: %w", err)
 	}
-	key := w.getObjectKey(nextOffset)
-	fmt.Printf("Putting object with key: %s\n", key) // Crucial logging
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucketName),
-		Key:         aws.String(key),
+		Key:         aws.String(w.getObjectKey(nextOffset)),
 		Body:        bytes.NewReader(buf),
 		IfNoneMatch: aws.String("*"),
 	}

@@ -131,8 +131,45 @@ func TestAppendAndReadSingle(t *testing.T) {
 		t.Errorf("data mismatch: expected %q, got %q", testData, record.Data)
 	}
 }
-
 func TestAppendMultiple(t *testing.T) {
+	wal, cleanup := getWAL(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	testData := [][]byte{
+		[]byte("Do not answer. Do not answer. Do not answer."),
+		[]byte("I am a pacifist in this world. You are lucky that I am first to receive your message."),
+		[]byte("I am warning you: do not answer. If you respond, we will come. Your world will be conquered"),
+		[]byte("Do not answer."),
+	}
+
+	var offsets []uint64
+	for _, data := range testData {
+		offset, err := wal.Append(ctx, data)
+		if err != nil {
+			t.Fatalf("failed to append: %v", err)
+		}
+		offsets = append(offsets, offset)
+	}
+
+	for i, offset := range offsets {
+		record, err := wal.Read(ctx, offset)
+		if err != nil {
+			t.Fatalf("failed to read offset %d: %v", offset, err)
+		}
+
+		if record.Offset != offset {
+			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
+		}
+
+		if string(record.Data) != string(testData[i]) {
+			t.Errorf("data mismatch at offset %d: expected %q, got %q",
+				offset, testData[i], record.Data)
+		}
+	}
+}
+
+func TestAppendMultipleConcurrency(t *testing.T) {
 	wal, cleanup := getWAL(t)
 	defer cleanup()
 	ctx := context.Background()
