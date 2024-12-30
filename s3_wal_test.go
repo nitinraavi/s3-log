@@ -2,13 +2,13 @@ package s3_log
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -131,6 +131,7 @@ func TestAppendAndReadSingle(t *testing.T) {
 		t.Errorf("data mismatch: expected %q, got %q", testData, record.Data)
 	}
 }
+
 func TestAppendMultiple(t *testing.T) {
 	wal, cleanup := getWAL(t)
 	defer cleanup()
@@ -177,13 +178,19 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 	// Random data generation
 	numData := 100
 	data := make([][]byte, numData)
-	rand.Seed(time.Now().UnixNano()) // Seed the random number generator
 
-	for i := range data {
-		dataLen := rand.Intn(100) + 1 // Generate random data length between 1 and 100
+	for i := 0; i < numData; i++ {
+		// Generate a random length between 1 and 100
+		nBig, err := rand.Int(rand.Reader, big.NewInt(100))
+		if err != nil {
+			t.Fatalf("failed to generate random length for data %d: %v", i, err)
+		}
+		dataLen := int(nBig.Int64()) + 1 // Add 1 to make it between 1 and 100
+
 		data[i] = make([]byte, dataLen)
-		for j := range data[i] {
-			data[i][j] = byte(rand.Intn(256)) // Generate random byte values
+		_, err = rand.Read(data[i]) // Fill with random bytes
+		if err != nil {
+			t.Fatalf("failed to generate random data for index %d: %v", i, err)
 		}
 	}
 

@@ -71,16 +71,19 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	w.mu.Lock() // Acquire the lock
 	defer w.mu.Unlock()
 	nextOffset := w.length + 1
+
 	buf, err := prepareBody(nextOffset, data)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare object body: %w", err)
 	}
+
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucketName),
 		Key:         aws.String(w.getObjectKey(nextOffset)),
 		Body:        bytes.NewReader(buf),
 		IfNoneMatch: aws.String("*"),
 	}
+
 	if _, err = w.client.PutObject(ctx, input); err != nil {
 		return 0, fmt.Errorf("failed to put object to S3: %w", err)
 	}
