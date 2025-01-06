@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -18,6 +19,7 @@ type S3WAL struct {
 	bucketName string
 	prefix     string
 	length     uint64
+	mu         sync.Mutex
 }
 
 func NewS3WAL(client *s3.Client, bucketName, prefix string) *S3WAL {
@@ -66,6 +68,8 @@ func prepareBody(offset uint64, data []byte) ([]byte, error) {
 }
 
 func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
+	w.mu.Lock() // Acquire the lock
+	defer w.mu.Unlock()
 	nextOffset := w.length + 1
 
 	buf, err := prepareBody(nextOffset, data)
