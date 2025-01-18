@@ -32,7 +32,15 @@ func NewS3WAL(client *s3.Client, bucketName, prefix string) *S3WAL {
 }
 
 func (w *S3WAL) getObjectKey(offset uint64) string {
+	fmt.Println(w.prefix + "/" + fmt.Sprintf("%020d", offset))
 	return w.prefix + "/" + fmt.Sprintf("%020d", offset)
+
+}
+
+func (w *S3WAL) getObjectKeyV2(offset uint64) string {
+	prefix := offset / 64 // Assuming 64 records per prefix
+	fmt.Printf("record/%03d/%020d.data", prefix, offset)
+	return fmt.Sprintf("record/%03d/%020d.data", prefix, offset)
 }
 
 func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
