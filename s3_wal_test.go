@@ -65,6 +65,7 @@ func emptyBucket(ctx context.Context, client *s3.Client, bucketName, prefix stri
 			return fmt.Errorf("failed to list objects: %w", err)
 		}
 		if len(output.Contents) == 0 {
+			fmt.Printf("No objects found with prefix '%s' in bucket '%s'\n", prefix, bucketName)
 			continue
 		}
 		objectIds := make([]types.ObjectIdentifier, len(output.Contents))
