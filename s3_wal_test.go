@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -21,6 +22,15 @@ func generateRandomStr() string {
 	rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+// func generateRandomUint64() uint64 {
+// 	b := make([]byte, 8) // 8 bytes for a uint64
+// 	_, err := rand.Read(b)
+// 	if err != nil {
+// 		panic(fmt.Errorf("failed to generate random bytes: %w", err))
+// 	}
+// 	return binary.BigEndian.Uint64(b) // Convert bytes to uint64
+// }
 
 func setupMinioClient() *s3.Client {
 	// https://stackoverflow.com/a/78815403
@@ -84,7 +94,7 @@ func emptyBucket(ctx context.Context, client *s3.Client, bucketName, prefix stri
 func getWAL(t *testing.T) (*S3WAL, func()) {
 	client := setupMinioClient()
 	bucketName := "test-wal-bucket-" + generateRandomStr()
-	prefix := generateRandomStr()
+	prefix := "000"
 
 	if err := setupBucket(client, bucketName); err != nil {
 		t.Fatal(err)
@@ -100,7 +110,8 @@ func getWAL(t *testing.T) (*S3WAL, func()) {
 			t.Logf("failed to delete bucket during cleanup: %v", err)
 		}
 	}
-	return NewS3WAL(client, bucketName, prefix), cleanup
+	prefixUint64, _ := strconv.ParseUint(prefix, 10, 64)
+	return NewS3WAL(client, bucketName, prefixUint64), cleanup
 }
 
 func TestAppendAndReadSingle(t *testing.T) {
