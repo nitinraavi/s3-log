@@ -99,9 +99,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare object body: %w", err)
 	}
-	println("before %d", w.prefix)
 	key, _ := w.getObjectKey(nextOffset)
-	println("after %d", w.prefix)
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucketName),
 		Key:         aws.String(key),
