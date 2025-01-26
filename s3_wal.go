@@ -39,7 +39,7 @@ func NewS3WAL(client *s3.Client, bucketName string, prefix uint64) *S3WAL {
 func (w *S3WAL) getObjectKey(offset uint64) (string, uint64) {
 	prefix := (offset - 1) / 64             // Calculate the prefix based on 64 records per group
 	groupOffset := 64 - ((offset - 1) % 64) // Reverse numbering: starts at 64 and ends at 1
-	fmt.Printf("/record/%03d/%010d.data", prefix, groupOffset)
+	// fmt.Printf("/record/%03d/%010d.data", prefix, groupOffset)
 	w.prefix = prefix
 	return fmt.Sprintf("/record/%03d/%010d.data", prefix, groupOffset), groupOffset
 
@@ -113,7 +113,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 
 	//  Check if we should write a checkpoint (when groupOffset resets to 64)
 	if w.prefix != 0 {
-		fmt.Printf("Persisted prefix: %d\n", w.prefix) // Access the persisted prefix
+		fmt.Printf("\nPersisted prefix: %d\n", w.prefix) // Access the persisted prefix
 		// This means we are starting a new group
 		checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", w.prefix)
 
