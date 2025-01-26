@@ -55,10 +55,10 @@ func setupBucket(client *s3.Client, bucketName string) error {
 }
 
 // emptyBucket deletes the bucket because dumbass AWS does not have a direct API
-func emptyBucket(ctx context.Context, client *s3.Client, bucketName, prefix string) error {
+func emptyBucket(ctx context.Context, client *s3.Client, bucketName string) error {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
-		Prefix: aws.String(prefix),
+		// Prefix: aws.String(prefix),
 	}
 	paginator := s3.NewListObjectsV2Paginator(client, input)
 	for paginator.HasMorePages() {
@@ -101,7 +101,7 @@ func getWAL(t *testing.T) (*S3WAL, func()) {
 		t.Fatal(err)
 	}
 	cleanup := func() {
-		if err := emptyBucket(context.Background(), client, bucketName, prefix); err != nil {
+		if err := emptyBucket(context.Background(), client, bucketName); err != nil {
 			t.Logf("failed to empty bucket during cleanup: %v", err)
 		}
 		_, err := client.DeleteBucket(context.Background(), &s3.DeleteBucketInput{
