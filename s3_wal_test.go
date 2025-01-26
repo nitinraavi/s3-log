@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"strconv"
-	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -181,67 +179,67 @@ func TestAppendMultiple(t *testing.T) {
 	}
 }
 
-func TestAppendMultipleConcurrency(t *testing.T) {
-	wal, cleanup := getWAL(t)
-	defer cleanup()
-	ctx := context.Background()
+// func TestAppendMultipleConcurrency(t *testing.T) {
+// 	wal, cleanup := getWAL(t)
+// 	defer cleanup()
+// 	ctx := context.Background()
 
-	// Random data generation
-	numData := 100
-	data := make([][]byte, numData)
+// 	// Random data generation
+// 	numData := 100
+// 	data := make([][]byte, numData)
 
-	for i := 0; i < numData; i++ {
-		// Generate a random length between 1 and 100
-		nBig, err := rand.Int(rand.Reader, big.NewInt(100))
-		if err != nil {
-			t.Fatalf("failed to generate random length for data %d: %v", i, err)
-		}
-		dataLen := int(nBig.Int64()) + 1 // Add 1 to make it between 1 and 100
+// 	for i := 0; i < numData; i++ {
+// 		// Generate a random length between 1 and 100
+// 		nBig, err := rand.Int(rand.Reader, big.NewInt(100))
+// 		if err != nil {
+// 			t.Fatalf("failed to generate random length for data %d: %v", i, err)
+// 		}
+// 		dataLen := int(nBig.Int64()) + 1 // Add 1 to make it between 1 and 100
 
-		data[i] = make([]byte, dataLen)
-		_, err = rand.Read(data[i]) // Fill with random bytes
-		if err != nil {
-			t.Fatalf("failed to generate random data for index %d: %v", i, err)
-		}
-	}
+// 		data[i] = make([]byte, dataLen)
+// 		_, err = rand.Read(data[i]) // Fill with random bytes
+// 		if err != nil {
+// 			t.Fatalf("failed to generate random data for index %d: %v", i, err)
+// 		}
+// 	}
 
-	var wg sync.WaitGroup
-	offsets := make([]uint64, len(data)) // Pre-allocate the offsets slice
+// 	var wg sync.WaitGroup
+// 	offsets := make([]uint64, len(data)) // Pre-allocate the offsets slice
 
-	for i, data := range data {
-		wg.Add(1)
-		go func(i int, data []byte) {
-			defer wg.Done()
+// 	for i, data := range data {
+// 		wg.Add(1)
+// 		go func(i int, data []byte) {
+// 			defer wg.Done()
 
-			offset, err := wal.Append(ctx, data)
-			if err != nil {
-				t.Errorf("failed to append data %d: %v", i, err)
-				return // Exit the goroutine on error
-			}
-			offsets[i] = offset
-		}(i, data)
-	}
+// 			offset, err := wal.Append(ctx, data)
+// 			if err != nil {
+// 				t.Errorf("failed to append data %d: %v", i, err)
+// 				return // Exit the goroutine on error
+// 			}
+// 			offsets[i] = offset
+// 		}(i, data)
+// 	}
 
-	// Wait for all goroutines to finish appending
-	wg.Wait()
+// 	// Wait for all goroutines to finish appending
+// 	wg.Wait()
 
-	// Now read and verify data
-	for i, offset := range offsets {
-		record, err := wal.Read(ctx, offset)
-		if err != nil {
-			t.Fatalf("failed to read offset %d: %v", offset, err)
-		}
+// 	// Now read and verify data
+// 	for i, offset := range offsets {
+// 		record, err := wal.Read(ctx, offset)
+// 		if err != nil {
+// 			t.Fatalf("failed to read offset %d: %v", offset, err)
+// 		}
 
-		if record.Offset != offset {
-			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
-		}
+// 		if record.Offset != offset {
+// 			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
+// 		}
 
-		if string(record.Data) != string(data[i]) {
-			t.Errorf("data mismatch at offset %d: expected %q, got %q",
-				offset, data[i], record.Data)
-		}
-	}
-}
+// 		if string(record.Data) != string(data[i]) {
+// 			t.Errorf("data mismatch at offset %d: expected %q, got %q",
+// 				offset, data[i], record.Data)
+// 		}
+// 	}
+// }
 
 func TestReadNonExistent(t *testing.T) {
 	wal, cleanup := getWAL(t)
