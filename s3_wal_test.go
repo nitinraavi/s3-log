@@ -93,7 +93,7 @@ func emptyBucket(ctx context.Context, client *s3.Client, bucketName, prefix stri
 func getWAL(t *testing.T) (*S3WAL, func()) {
 	client := setupMinioClient()
 	bucketName := "test-wal-bucket-" + generateRandomStr()
-	prefix := "/record/000"
+	prefix := "/record/000/"
 
 	if err := setupBucket(client, bucketName); err != nil {
 		t.Fatal(err)
