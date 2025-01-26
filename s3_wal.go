@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"strconv"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -37,17 +36,32 @@ func NewS3WAL(client *s3.Client, bucketName, prefix string) *S3WAL {
 
 // }
 
-func (w *S3WAL) getObjectKey(offset uint64) string {
-	prefix := offset / 64            // Calculate the prefix based on 64 records per group
-	groupOffset := (offset % 64) + 1 // Reset offset within each group to start from 1
-	fmt.Printf("record/%03d/%020d.data", prefix, groupOffset)
-	return fmt.Sprintf("record/%03d/%020d.data", prefix, groupOffset)
+func (w *S3WAL) getObjectKey(offset uint64) (string, uint64) {
+	prefix_num := (offset - 1) / 64         // Calculate the prefix based on 64 records per group
+	groupOffset := 64 - ((offset - 1) % 64) // Reverse numbering: starts at 64 and ends at 1
+	fmt.Printf("/record/%03d/%010d.data", prefix_num, groupOffset)
+	// w.prefix = prefix_num
+	return fmt.Sprintf("/record/%03d/%010d.data", prefix_num, groupOffset), groupOffset
+
 }
 
+// func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
+// 	// skip the `w.prefix` and "/"
+// 	numStr := key[len(w.prefix)+1:]
+// 	return strconv.ParseUint(numStr, 10, 64)
+// }
+
 func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
-	// skip the `w.prefix` and "/"
-	numStr := key[len(w.prefix)+1:]
-	return strconv.ParseUint(numStr, 10, 64)
+	// Extract the prefix and groupOffset from the key
+	var prefix, groupOffset uint64
+	_, err := fmt.Sscanf(key, "/record/%03d/%010d.data", &prefix, &groupOffset)
+	if err != nil {
+		return 0, fmt.Errorf("invalid key format: %s", key)
+	}
+
+	// Calculate the offset using the reverse numbering logic
+	offset := (prefix * 64) + (64 - groupOffset + 1)
+	return offset, nil
 }
 
 func calculateChecksum(buf *bytes.Buffer) [32]byte {
@@ -85,10 +99,12 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare object body: %w", err)
 	}
-
+	println("before %d", w.prefix)
+	key, _ := w.getObjectKey(nextOffset)
+	println("after %d", w.prefix)
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucketName),
-		Key:         aws.String(w.getObjectKey(nextOffset)),
+		Key:         aws.String(key),
 		Body:        bytes.NewReader(buf),
 		IfNoneMatch: aws.String("*"),
 	}
@@ -96,12 +112,32 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	if _, err = w.client.PutObject(ctx, input); err != nil {
 		return 0, fmt.Errorf("failed to put object to S3: %w", err)
 	}
+
+	//  Check if we should write a checkpoint (when groupOffset resets to 64)
+	// if w.prefix != 0 {
+	// 	fmt.Printf("Persisted prefix: %d\n", w.prefix) // Access the persisted prefix
+	// 	// This means we are starting a new group
+	// 	checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", w.prefix)
+
+	// 	// Create the checkpoint data
+	// 	checkpointData := []byte(fmt.Sprintf("Checkpoint for group %03d", w.prefix))
+
+	// 	checkpointInput := &s3.PutObjectInput{
+	// 		Bucket: aws.String(w.bucketName),
+	// 		Key:    aws.String(checkpointKey),
+	// 		Body:   bytes.NewReader(checkpointData),
+	// 	}
+
+	// 	if _, err = w.client.PutObject(ctx, checkpointInput); err != nil {
+	// 		return 0, fmt.Errorf("failed to write checkpoint to S3: %w", err)
+	// 	}
+	// }
 	w.length = nextOffset
 	return nextOffset, nil
 }
 
 func (w *S3WAL) Read(ctx context.Context, offset uint64) (Record, error) {
-	key := w.getObjectKey(offset)
+	key, _ := w.getObjectKey(offset)
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucketName),
 		Key:    aws.String(key),

@@ -346,3 +346,57 @@ func TestLastRecord(t *testing.T) {
 		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
 	}
 }
+
+func TestGetObjectKey(t *testing.T) {
+	w := &S3WAL{}
+
+	tests := []struct {
+		offset   uint64
+		expected string
+	}{
+		{1, "/record/000/0000000064.data"},   // First record in the first group
+		{64, "/record/000/0000000001.data"},  // Last record in the first group
+		{65, "/record/001/0000000064.data"},  // First record in the second group
+		{128, "/record/001/0000000001.data"}, // Last record in the second group
+		{129, "/record/002/0000000064.data"}, // First record in the third group
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("offset=%d", tt.offset), func(t *testing.T) {
+			got, _ := w.getObjectKey(tt.offset)
+			if got != tt.expected {
+				t.Errorf("getObjectKey(%d) = %s; want %s", tt.offset, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetOffsetFromKey(t *testing.T) {
+	w := &S3WAL{}
+
+	tests := []struct {
+		key      string
+		expected uint64
+		wantErr  bool
+	}{
+		{"/record/000/0000000064.data", 1, false},   // First record in the first group
+		{"/record/000/0000000001.data", 64, false},  // Last record in the first group
+		{"/record/001/0000000064.data", 65, false},  // First record in the second group
+		{"/record/001/0000000001.data", 128, false}, // Last record in the second group
+		{"/record/002/0000000064.data", 129, false}, // First record in the third group
+		{"invalid/key/format.data", 0, true},        // Invalid format
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			got, err := w.getOffsetFromKey(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getOffsetFromKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.expected {
+				t.Errorf("getOffsetFromKey() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
