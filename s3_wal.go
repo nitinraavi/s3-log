@@ -100,6 +100,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 		return 0, fmt.Errorf("failed to prepare object body: %w", err)
 	}
 	key, _ := w.getObjectKey(nextOffset)
+	println(key)
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucketName),
 		Key:         aws.String(key),
@@ -129,6 +130,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 		if _, err = w.client.PutObject(ctx, checkpointInput); err != nil {
 			return 0, fmt.Errorf("failed to write checkpoint to S3: %w", err)
 		}
+		println("Successfully added record from key: %s", checkpointKey)
 	}
 	w.length = nextOffset
 	return nextOffset, nil
