@@ -113,8 +113,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	}
 
 	//  Check if we should write a checkpoint (when groupOffset resets to 64)
-	if w.prefix != 0 {
-		fmt.Printf("\nPersisted prefix: %d\n", w.prefix) // Access the persisted prefix
+	if nextOffset == 64 {
 		// This means we are starting a new group
 		checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", w.prefix)
 
