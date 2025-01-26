@@ -188,7 +188,7 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 	ctx := context.Background()
 
 	// Random data generation
-	numData := 100
+	numData := 200
 	data := make([][]byte, numData)
 
 	for i := 0; i < numData; i++ {
