@@ -112,7 +112,7 @@ func getWAL(t *testing.T) (*S3WAL, func()) {
 		}
 	}
 	prefixUint64, _ := strconv.ParseUint(prefix, 10, 64)
-	return NewS3WAL(client, bucketName, prefixUint64), cleanup
+	return NewS3WAL(client, bucketName, prefixUint64, 0), cleanup
 }
 
 func TestAppendAndReadSingle(t *testing.T) {

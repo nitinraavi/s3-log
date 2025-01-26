@@ -21,12 +21,12 @@ type S3WAL struct {
 	mu         sync.Mutex
 }
 
-func NewS3WAL(client *s3.Client, bucketName string, prefix uint64) *S3WAL {
+func NewS3WAL(client *s3.Client, bucketName string, prefix, group uint64) *S3WAL {
 	return &S3WAL{
 		client:     client,
 		bucketName: bucketName,
 		prefix:     prefix,
-		length:     0,
+		length:     1200,
 	}
 }
 
@@ -39,7 +39,6 @@ func NewS3WAL(client *s3.Client, bucketName string, prefix uint64) *S3WAL {
 func (w *S3WAL) getObjectKey(offset uint64) (string, uint64) {
 	prefix := (offset - 1) / 64             // Calculate the prefix based on 64 records per group
 	groupOffset := 64 - ((offset - 1) % 64) // Reverse numbering: starts at 64 and ends at 1
-	// fmt.Printf("/record/%03d/%010d.data", prefix, groupOffset)
 	w.prefix = prefix
 	return fmt.Sprintf("/record/%03d/%010d.data", prefix, groupOffset), groupOffset
 
@@ -113,24 +112,24 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	}
 
 	//  Check if we should write a checkpoint (when groupOffset resets to 64)
-	if nextOffset == 64 {
-		// This means we are starting a new group
-		checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", w.prefix)
+	// if w.prefix {
+	// 	// This means we are starting a new group
+	// 	checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", w.prefix)
 
-		// Create the checkpoint data
-		checkpointData := []byte(fmt.Sprintf("Checkpoint for group %03d", w.prefix))
+	// 	// Create the checkpoint data
+	// 	checkpointData := []byte(fmt.Sprintf("Checkpoint for group %03d", w.prefix))
 
-		checkpointInput := &s3.PutObjectInput{
-			Bucket: aws.String(w.bucketName),
-			Key:    aws.String(checkpointKey),
-			Body:   bytes.NewReader(checkpointData),
-		}
+	// 	checkpointInput := &s3.PutObjectInput{
+	// 		Bucket: aws.String(w.bucketName),
+	// 		Key:    aws.String(checkpointKey),
+	// 		Body:   bytes.NewReader(checkpointData),
+	// 	}
 
-		if _, err = w.client.PutObject(ctx, checkpointInput); err != nil {
-			return 0, fmt.Errorf("failed to write checkpoint to S3: %w", err)
-		}
-		println("Successfully added record from key: %s", checkpointKey)
-	}
+	// 	if _, err = w.client.PutObject(ctx, checkpointInput); err != nil {
+	// 		return 0, fmt.Errorf("failed to write checkpoint to S3: %w", err)
+	// 	}
+	// 	println("Successfully added record from key: %s", checkpointKey)
+	// }
 	w.length = nextOffset
 	return nextOffset, nil
 }
