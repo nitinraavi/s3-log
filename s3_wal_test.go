@@ -88,7 +88,7 @@ func emptyBucket(ctx context.Context, client *s3.Client, bucketName string) erro
 			return fmt.Errorf("failed to delete objects: %w", err)
 		}
 	}
-
+	println("Successfully Cleaned the Bucket")
 	return nil
 }
 
