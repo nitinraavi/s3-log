@@ -126,9 +126,14 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 		IfNoneMatch: aws.String("*"),
 	}
 
+	// if _, err = w.client.PutObject(ctx, input); err != nil {
+	// 	return 0, fmt.Errorf("failed to put object to S3: %w", err)
+	// }
 	if _, err = w.client.PutObject(ctx, input); err != nil {
+		fmt.Println("Uploading Object Key:", *input.Key) // Print the object key before uploading
 		return 0, fmt.Errorf("failed to put object to S3: %w", err)
 	}
+
 	w.length = nextOffset
 	return nextOffset, nil
 }
