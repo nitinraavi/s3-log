@@ -198,7 +198,6 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 			return Record{}, fmt.Errorf("failed to list records: %w", err)
 		}
 		for _, obj := range output.Contents {
-			println(*obj.Key)
 			offset, err := w.getOffsetFromKey(*obj.Key)
 			if err != nil {
 				continue
