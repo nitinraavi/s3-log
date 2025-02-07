@@ -18,8 +18,8 @@ type S3WAL struct {
 	bucketName string
 	prefix     uint64
 	length     uint64
-	mu         sync.Mutex
 	prefixLen  uint64
+	mu         sync.Mutex
 }
 
 func NewS3WAL(client *s3.Client, bucketName string, prefix, prefixLen uint64) *S3WAL {
@@ -27,8 +27,8 @@ func NewS3WAL(client *s3.Client, bucketName string, prefix, prefixLen uint64) *S
 		client:     client,
 		bucketName: bucketName,
 		prefix:     prefix,
-		length:     0,
 		prefixLen:  prefixLen,
+		length:     0,
 	}
 }
 
