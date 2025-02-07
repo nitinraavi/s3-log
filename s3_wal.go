@@ -42,7 +42,7 @@ func (w *S3WAL) getObjectKey(offset uint64) string {
 	prefix := (offset - 1) / globalInt                    // Calculate the prefix based on 64 records per group
 	groupOffset := globalInt - ((offset - 1) % globalInt) // Reverse numbering: starts at 64 and ends at 1
 	w.prefix = prefix
-	return fmt.Sprintf("/record/%03d/%010d.data", prefix, groupOffset)
+	return fmt.Sprintf("record/%03d/%010d.data", prefix, groupOffset)
 }
 
 // func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
@@ -54,7 +54,7 @@ func (w *S3WAL) getObjectKey(offset uint64) string {
 func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
 	// Extract the prefix and groupOffset from the key
 	var prefix, groupOffset uint64
-	_, err := fmt.Sscanf(key, "/record/%03d/%010d.data", &prefix, &groupOffset)
+	_, err := fmt.Sscanf(key, "record/%03d/%010d.data", &prefix, &groupOffset)
 	if err != nil {
 		return 0, fmt.Errorf("invalid key format: %s", key)
 	}
@@ -201,7 +201,7 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 	if maxPrefix == 0 {
 		return Record{}, fmt.Errorf("no valid checkpoints found")
 	}
-	fmt.Printf("Found Prefix %d e\n", maxPrefix)
+	fmt.Printf("Found Prefix %d \n", maxPrefix)
 
 	// Step 2: Find the highest offset in /record/maxPrefix/
 	prefixString := fmt.Sprintf("/record/%03d/", maxPrefix)
