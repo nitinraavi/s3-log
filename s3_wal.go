@@ -206,7 +206,7 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 	fmt.Printf("Found Prefix %d \n", maxPrefix)
 
 	// Step 2: Find the highest offset in /record/maxPrefix/
-	prefixString := fmt.Sprintf("/record/%03d/", maxPrefix)
+	prefixString := fmt.Sprintf("record/%03d/", maxPrefix)
 	input = &s3.ListObjectsV2Input{
 		Bucket: aws.String(w.bucketName),
 		Prefix: aws.String(prefixString),
