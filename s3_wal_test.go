@@ -24,15 +24,6 @@ func generateRandomStr() string {
 	return hex.EncodeToString(b)
 }
 
-// func generateRandomUint64() uint64 {
-// 	b := make([]byte, 8) // 8 bytes for a uint64
-// 	_, err := rand.Read(b)
-// 	if err != nil {
-// 		panic(fmt.Errorf("failed to generate random bytes: %w", err))
-// 	}
-// 	return binary.BigEndian.Uint64(b) // Convert bytes to uint64
-// }
-
 func setupMinioClient() *s3.Client {
 	// https://stackoverflow.com/a/78815403
 	// thank you lurenyang
@@ -189,90 +180,25 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 	ctx := context.Background()
 
 	// Random data generation
-	numData := 200
+	numData := 1000 // Using the larger number from TestAppendMultipleConcurrency_01
 	data := make([][]byte, numData)
 
 	for i := 0; i < numData; i++ {
-		// Generate a random length between 1 and 100
 		nBig, err := rand.Int(rand.Reader, big.NewInt(100))
 		if err != nil {
 			t.Fatalf("failed to generate random length for data %d: %v", i, err)
 		}
-		dataLen := int(nBig.Int64()) + 1 // Add 1 to make it between 1 and 100
-
+		dataLen := int(nBig.Int64()) + 1
 		data[i] = make([]byte, dataLen)
-		_, err = rand.Read(data[i]) // Fill with random bytes
+
+		_, err = rand.Read(data[i])
 		if err != nil {
 			t.Fatalf("failed to generate random data for index %d: %v", i, err)
 		}
 	}
 
 	var wg sync.WaitGroup
-	offsets := make([]uint64, len(data)) // Pre-allocate the offsets slice
-
-	for i, data := range data {
-		wg.Add(1)
-		go func(i int, data []byte) {
-			defer wg.Done()
-
-			offset, err := wal.Append(ctx, data)
-			if err != nil {
-				t.Errorf("failed to append data %d: %v", i, err)
-				return // Exit the goroutine on error
-			}
-			offsets[i] = offset
-		}(i, data)
-	}
-
-	// Wait for all goroutines to finish appending
-	wg.Wait()
-
-	// Now read and verify data
-	for i, offset := range offsets {
-		record, err := wal.Read(ctx, offset)
-		if err != nil {
-			t.Fatalf("failed to read offset %d: %v", offset, err)
-		}
-
-		if record.Offset != offset {
-			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
-		}
-
-		if string(record.Data) != string(data[i]) {
-			t.Errorf("data mismatch at offset %d: expected %q, got %q",
-				offset, data[i], record.Data)
-		}
-	}
-}
-
-func TestAppendMultipleConcurrency_01(t *testing.T) {
-	wal, cleanup := getWAL(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	// Random data generation
-	numData := 1000
-	data := make([][]byte, numData)
-
-	for i := 0; i < numData; i++ {
-		// Generate a random length between 1 and 100
-		nBig, err := rand.Int(rand.Reader, big.NewInt(100))
-		if err != nil {
-			t.Fatalf("failed to generate random length for data %d: %v", i, err)
-		}
-		dataLen := int(nBig.Int64()) + 1 // Add 1 to make it between 1 and 100
-
-		data[i] = make([]byte, dataLen)
-		_, err = rand.Read(data[i]) // Fill with random bytes
-		if err != nil {
-			t.Fatalf("failed to generate random data for index %d: %v", i, err)
-		}
-	}
-
-	var wg sync.WaitGroup
-	offsets := make([]uint64, len(data)) // Pre-allocate the offsets slice
-
-	// Track checkpoint creation
+	offsets := make([]uint64, len(data))
 	checkpoints := make(map[uint64]bool)
 	var mu sync.Mutex
 
@@ -288,13 +214,12 @@ func TestAppendMultipleConcurrency_01(t *testing.T) {
 			}
 			offsets[i] = offset
 
-			// Check if a checkpoint should have been created
-			newPrefix := (offset - 1) / globalInt
+			// Check for checkpoint creation
+			newPrefix := (offset - 1) / wal.prefixLen
 			mu.Lock()
 			if !checkpoints[newPrefix] {
 				checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", newPrefix)
 
-				// Verify the checkpoint exists
 				_, err := wal.client.HeadObject(ctx, &s3.HeadObjectInput{
 					Bucket: aws.String(wal.bucketName),
 					Key:    aws.String(checkpointKey),
@@ -308,7 +233,6 @@ func TestAppendMultipleConcurrency_01(t *testing.T) {
 		}(i, data)
 	}
 
-	// Wait for all goroutines to finish appending
 	wg.Wait()
 
 	// Now read and verify data
@@ -488,11 +412,11 @@ func TestGetObjectKey(t *testing.T) {
 		offset   uint64
 		expected string
 	}{
-		{1, fmt.Sprintf("record/%03d/%010d.data", 0, globalInt)},                       // First record in the first group
-		{uint64(globalInt), fmt.Sprintf("record/%03d/%010d.data", 0, 1)},               // Last record in the first group
-		{uint64(globalInt + 1), fmt.Sprintf("record/%03d/%010d.data", 1, globalInt)},   // First record in the second group
-		{uint64(globalInt * 2), fmt.Sprintf("record/%03d/%010d.data", 1, 1)},           // Last record in the second group
-		{uint64(globalInt*2 + 1), fmt.Sprintf("record/%03d/%010d.data", 2, globalInt)}, // First record in the third group
+		{1, fmt.Sprintf("record/%03d/%010d.data", 0, w.prefixLen)},                         // First record in the first group
+		{uint64(w.prefixLen), fmt.Sprintf("record/%03d/%010d.data", 0, 1)},                 // Last record in the first group
+		{uint64(w.prefixLen + 1), fmt.Sprintf("record/%03d/%010d.data", 1, w.prefixLen)},   // First record in the second group
+		{uint64(w.prefixLen * 2), fmt.Sprintf("record/%03d/%010d.data", 1, 1)},             // Last record in the second group
+		{uint64(w.prefixLen*2 + 1), fmt.Sprintf("record/%03d/%010d.data", 2, w.prefixLen)}, // First record in the third group
 	}
 
 	for _, tt := range tests {
@@ -514,12 +438,12 @@ func TestGetOffsetFromKey(t *testing.T) {
 		expected uint64
 		wantErr  bool
 	}{
-		{fmt.Sprintf("record/%03d/%010d.data", 0, globalInt), 1, false},                       // First record in the first group
-		{fmt.Sprintf("record/%03d/%010d.data", 0, 1), uint64(globalInt), false},               // Last record in the first group
-		{fmt.Sprintf("record/%03d/%010d.data", 1, globalInt), uint64(globalInt + 1), false},   // First record in the second group
-		{fmt.Sprintf("record/%03d/%010d.data", 1, 1), uint64(globalInt * 2), false},           // Last record in the second group
-		{fmt.Sprintf("record/%03d/%010d.data", 2, globalInt), uint64(globalInt*2 + 1), false}, // First record in the third group
-		{"invalid/key/format.data", 0, true},                                                  // Invalid format
+		{fmt.Sprintf("record/%03d/%010d.data", 0, w.prefixLen), 1, false},                         // First record in the first group
+		{fmt.Sprintf("record/%03d/%010d.data", 0, 1), uint64(w.prefixLen), false},                 // Last record in the first group
+		{fmt.Sprintf("record/%03d/%010d.data", 1, w.prefixLen), uint64(w.prefixLen + 1), false},   // First record in the second group
+		{fmt.Sprintf("record/%03d/%010d.data", 1, 1), uint64(w.prefixLen * 2), false},             // Last record in the second group
+		{fmt.Sprintf("record/%03d/%010d.data", 2, w.prefixLen), uint64(w.prefixLen*2 + 1), false}, // First record in the third group
+		{"invalid/key/format.data", 0, true},                                                      // Invalid format
 	}
 
 	for _, tt := range tests {

@@ -19,38 +19,25 @@ type S3WAL struct {
 	prefix     uint64
 	length     uint64
 	mu         sync.Mutex
+	prefixLen  uint64
 }
 
-func NewS3WAL(client *s3.Client, bucketName string, prefix, group uint64) *S3WAL {
+func NewS3WAL(client *s3.Client, bucketName string, prefix, prefixLen uint64) *S3WAL {
 	return &S3WAL{
 		client:     client,
 		bucketName: bucketName,
 		prefix:     prefix,
 		length:     0,
+		prefixLen:  prefixLen,
 	}
 }
 
-var globalInt uint64 = 20
-
-// func (w *S3WAL) getObjectKey(offset uint64) string {
-// 	fmt.Println(w.prefix + "/" + fmt.Sprintf("%020d", offset))
-// 	return w.prefix + "/" + fmt.Sprintf("%020d", offset)
-
-// }
-
 func (w *S3WAL) getObjectKey(offset uint64) string {
-	prefix := (offset - 1) / globalInt                    // Calculate the prefix based on 64 records per group
-	groupOffset := globalInt - ((offset - 1) % globalInt) // Reverse numbering: starts at 64 and ends at 1
+	prefix := (offset - 1) / w.prefixLen                      // Calculate the prefix based on 64 records per group
+	groupOffset := w.prefixLen - ((offset - 1) % w.prefixLen) // Reverse numbering: starts at 64 and ends at 1
 	w.prefix = prefix
 	return fmt.Sprintf("record/%03d/%010d.data", prefix, groupOffset)
 }
-
-// func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
-// 	// skip the `w.prefix` and "/"
-// 	numStr := key[len(w.prefix)+1:]
-// 	return strconv.ParseUint(numStr, 10, 64)
-// }
-
 func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
 	// Extract the prefix and groupOffset from the key
 	var prefix, groupOffset uint64
@@ -60,7 +47,7 @@ func (w *S3WAL) getOffsetFromKey(key string) (uint64, error) {
 	}
 
 	// Calculate the offset using the reverse numbering logic
-	offset := (prefix * globalInt) + (globalInt - groupOffset + 1)
+	offset := (prefix * w.prefixLen) + (w.prefixLen - groupOffset + 1)
 	return offset, nil
 }
 
@@ -96,7 +83,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	nextOffset := w.length + 1
 
 	// Detect prefix change
-	newPrefix := (nextOffset - 1) / globalInt
+	newPrefix := (nextOffset - 1) / w.prefixLen
 	if newPrefix != w.prefix || w.length == 0 {
 		// Write checkpoint for the new prefix
 		checkpointKey := fmt.Sprintf("checkpoint/%03d.data", newPrefix)
@@ -112,7 +99,6 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 		if _, err := w.client.PutObject(ctx, checkpointInput); err != nil {
 			return 0, fmt.Errorf("failed to write checkpoint to S3: %w", err)
 		}
-		fmt.Printf("Successfully added checkpoint: %s\n", checkpointKey)
 	}
 
 	buf, err := prepareBody(nextOffset, data)
@@ -129,8 +115,6 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	if _, err = w.client.PutObject(ctx, input); err != nil {
 		return 0, fmt.Errorf("failed to put object to S3: %w", err)
 	}
-	fmt.Println("Uploading Object Key:", *input.Key) // Print the object key before uploading
-
 	w.length = nextOffset
 	return nextOffset, nil
 }
@@ -175,12 +159,10 @@ func (w *S3WAL) Read(ctx context.Context, offset uint64) (Record, error) {
 func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 	var maxPrefix int
 	var maxOffset uint64
-
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(w.bucketName),
 		Prefix: aws.String("checkpoint/"),
 	}
-
 	paginator := s3.NewListObjectsV2Paginator(w.client, input)
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
@@ -199,32 +181,26 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 			}
 		}
 	}
-
 	if maxPrefix == 0 {
 		return Record{}, fmt.Errorf("no valid checkpoints found")
 	}
-	fmt.Printf("Found Prefix %d \n", maxPrefix)
 
-	// Step 2: Find the highest offset in /record/maxPrefix/
+	// Find the highest offset in /record/maxPrefix/
 	prefixString := fmt.Sprintf("record/%03d/", maxPrefix)
 	input = &s3.ListObjectsV2Input{
 		Bucket: aws.String(w.bucketName),
 		Prefix: aws.String(prefixString),
 	}
 	paginator = s3.NewListObjectsV2Paginator(w.client, input)
-
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
 		if err != nil {
 			return Record{}, fmt.Errorf("failed to list records: %w", err)
 		}
-		// Debug: Check how many objects are listed
-		fmt.Printf("Found %d objects in page\n", len(output.Contents))
 		for _, obj := range output.Contents {
 			println(*obj.Key)
 			offset, err := w.getOffsetFromKey(*obj.Key)
 			if err != nil {
-				fmt.Printf("Skipping invalid key: %s\n", *obj.Key)
 				continue
 			}
 			if offset > maxOffset {
@@ -232,14 +208,11 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 			}
 		}
 	}
-
 	if maxOffset == 0 {
 		return Record{}, fmt.Errorf("no records found in last checkpoint")
 	}
-
 	// Restore WAL state
 	w.length = maxOffset
-
 	// Read and return the last record
 	return w.Read(ctx, maxOffset)
 }
