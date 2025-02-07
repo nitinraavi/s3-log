@@ -1,6 +1,7 @@
 package s3_log
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -244,6 +245,89 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 	}
 }
 
+func TestAppendMultipleConcurrency_01(t *testing.T) {
+	wal, cleanup := getWAL(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Random data generation
+	numData := 1000
+	data := make([][]byte, numData)
+
+	for i := 0; i < numData; i++ {
+		// Generate a random length between 1 and 100
+		nBig, err := rand.Int(rand.Reader, big.NewInt(100))
+		if err != nil {
+			t.Fatalf("failed to generate random length for data %d: %v", i, err)
+		}
+		dataLen := int(nBig.Int64()) + 1 // Add 1 to make it between 1 and 100
+
+		data[i] = make([]byte, dataLen)
+		_, err = rand.Read(data[i]) // Fill with random bytes
+		if err != nil {
+			t.Fatalf("failed to generate random data for index %d: %v", i, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+	offsets := make([]uint64, len(data)) // Pre-allocate the offsets slice
+
+	// Track checkpoint creation
+	checkpoints := make(map[uint64]bool)
+	var mu sync.Mutex
+
+	for i, data := range data {
+		wg.Add(1)
+		go func(i int, data []byte) {
+			defer wg.Done()
+
+			offset, err := wal.Append(ctx, data)
+			if err != nil {
+				t.Errorf("failed to append data %d: %v", i, err)
+				return
+			}
+			offsets[i] = offset
+
+			// Check if a checkpoint should have been created
+			newPrefix := (offset - 1) / globalInt
+			mu.Lock()
+			if !checkpoints[newPrefix] {
+				checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", newPrefix)
+
+				// Verify the checkpoint exists
+				_, err := wal.client.HeadObject(ctx, &s3.HeadObjectInput{
+					Bucket: aws.String(wal.bucketName),
+					Key:    aws.String(checkpointKey),
+				})
+				if err != nil {
+					t.Errorf("expected checkpoint missing: %s", checkpointKey)
+				}
+				checkpoints[newPrefix] = true
+			}
+			mu.Unlock()
+		}(i, data)
+	}
+
+	// Wait for all goroutines to finish appending
+	wg.Wait()
+
+	// Now read and verify data
+	for i, offset := range offsets {
+		record, err := wal.Read(ctx, offset)
+		if err != nil {
+			t.Fatalf("failed to read offset %d: %v", offset, err)
+		}
+
+		if record.Offset != offset {
+			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
+		}
+
+		if !bytes.Equal(record.Data, data[i]) {
+			t.Errorf("data mismatch at offset %d", offset)
+		}
+	}
+}
+
 func TestReadNonExistent(t *testing.T) {
 	wal, cleanup := getWAL(t)
 	defer cleanup()
@@ -375,7 +459,7 @@ func TestGetObjectKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("offset=%d", tt.offset), func(t *testing.T) {
-			got, _ := w.getObjectKey(tt.offset)
+			got := w.getObjectKey(tt.offset)
 			if got != tt.expected {
 				t.Errorf("getObjectKey(%d) = %s; want %s", tt.offset, got, tt.expected)
 			}
