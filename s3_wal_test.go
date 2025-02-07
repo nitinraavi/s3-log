@@ -485,21 +485,29 @@ func TestLastRecord(t *testing.T) {
 func TestGetObjectKey(t *testing.T) {
 	w := &S3WAL{}
 	tests := []struct {
+		name     string
 		offset   uint64
 		expected string
 	}{
-		{1, fmt.Sprintf("record/%03d/%010d.data", 0, globalInt)},                       // First record in the first group
-		{uint64(globalInt), fmt.Sprintf("record/%03d/%010d.data", 0, 1)},               // Last record in the first group
-		{uint64(globalInt + 1), fmt.Sprintf("record/%03d/%010d.data", 1, globalInt)},   // First record in the second group
-		{uint64(globalInt * 2), fmt.Sprintf("record/%03d/%010d.data", 1, 1)},           // Last record in the second group
-		{uint64(globalInt*2 + 1), fmt.Sprintf("record/%03d/%010d.data", 2, globalInt)}, // First record in the third group
+		{"First record in first group", 1, fmt.Sprintf("record/%03d/%010d.data", 0, globalInt)},
+		{"Second record in first group", 2, fmt.Sprintf("record/%03d/%010d.data", 0, globalInt-1)},
+		{"Last record in first group", uint64(globalInt), fmt.Sprintf("record/%03d/%010d.data", 0, 1)},
+		{"First record in second group", uint64(globalInt + 1), fmt.Sprintf("record/%03d/%010d.data", 1, globalInt)},
+		{"Second record in second group", uint64(globalInt + 2), fmt.Sprintf("record/%03d/%010d.data", 1, globalInt-1)},
+		{"Last record in second group", uint64(globalInt * 2), fmt.Sprintf("record/%03d/%010d.data", 1, 1)},
+		{"First record in third group", uint64(globalInt*2 + 1), fmt.Sprintf("record/%03d/%010d.data", 2, globalInt)},
+		{"Second record in third group", uint64(globalInt*2 + 2), fmt.Sprintf("record/%03d/%010d.data", 2, globalInt-1)},
+		{"Last record in third group", uint64(globalInt * 3), fmt.Sprintf("record/%03d/%010d.data", 2, 1)},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("offset=%d", tt.offset), func(t *testing.T) {
+		tt := tt // Capture tt variable correctly inside the loop
+		t.Run(tt.name, func(t *testing.T) {
 			got := w.getObjectKey(tt.offset)
+			fmt.Println(got) // Print each generated object key line by line
 			if got != tt.expected {
-				t.Errorf("getObjectKey(%d) = %s; want %s", tt.offset, got, tt.expected)
+				t.Errorf("Test Failed: %s\n  Offset: %d\n  Got: %s\n  Expected: %s",
+					tt.name, tt.offset, got, tt.expected)
 			}
 		})
 	}
