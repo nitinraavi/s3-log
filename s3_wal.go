@@ -188,7 +188,7 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 		for _, obj := range output.Contents {
 			key := *obj.Key
 			var prefix int
-			_, err := fmt.Sscanf(key, "/checkpoint/%03d", &prefix)
+			_, err := fmt.Sscanf(key, "checkpoint/%03d.data", &prefix)
 			if err != nil {
 				continue // Ignore invalid keys
 			}
