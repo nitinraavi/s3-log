@@ -471,27 +471,33 @@ func TestGetOffsetFromKey(t *testing.T) {
 	w := &S3WAL{}
 
 	tests := []struct {
+		name     string
 		key      string
 		expected uint64
 		wantErr  bool
 	}{
-		{"/record/000/0000000064.data", 1, false},   // First record in the first group
-		{"/record/000/0000000001.data", 64, false},  // Last record in the first group
-		{"/record/001/0000000064.data", 65, false},  // First record in the second group
-		{"/record/001/0000000001.data", 128, false}, // Last record in the second group
-		{"/record/002/0000000064.data", 129, false}, // First record in the third group
-		{"invalid/key/format.data", 0, true},        // Invalid format
+		{"First record in group 000", "/record/000/0000000064.data", 1, false},
+		{"Last record in group 000", "/record/000/0000000001.data", 64, false},
+		{"First record in group 001", "/record/001/0000000064.data", 65, false},
+		{"Last record in group 001", "/record/001/0000000001.data", 128, false},
+		{"First record in group 002", "/record/002/0000000064.data", 129, false},
+		{"Invalid format", "invalid/key/format.data", 0, true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got, err := w.getOffsetFromKey(tt.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getOffsetFromKey() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.expected {
-				t.Errorf("getOffsetFromKey() = %d, want %d", got, tt.expected)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Expected error for key %q but got none", tt.key)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for key %q: %v", tt.key, err)
+				} else if got != tt.expected {
+					t.Errorf("getOffsetFromKey(%q) = %d; want %d", tt.key, got, tt.expected)
+				}
 			}
 		})
 	}
