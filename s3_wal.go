@@ -99,7 +99,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 	newPrefix := (nextOffset - 1) / globalInt
 	if newPrefix != w.prefix || w.length == 0 {
 		// Write checkpoint for the new prefix
-		checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", newPrefix)
+		checkpointKey := fmt.Sprintf("checkpoint/%03d.data", newPrefix)
 
 		// Create checkpoint data
 		checkpointData := []byte(fmt.Sprintf("Checkpoint for group %03d", newPrefix))
@@ -176,7 +176,7 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(w.bucketName),
-		Prefix: aws.String("/checkpoint/"),
+		Prefix: aws.String("checkpoint/"),
 	}
 
 	paginator := s3.NewListObjectsV2Paginator(w.client, input)
@@ -201,6 +201,7 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 	if maxPrefix == 0 {
 		return Record{}, fmt.Errorf("no valid checkpoints found")
 	}
+
 	// Step 2: Find the highest offset in /record/maxPrefix/
 	prefixString := fmt.Sprintf("/record/%03d/", maxPrefix)
 	input = &s3.ListObjectsV2Input{
