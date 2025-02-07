@@ -444,9 +444,7 @@ func TestSameOffset(t *testing.T) {
 // }
 
 func TestGetObjectKey(t *testing.T) {
-	globalInt := 100 // Use the actual value in your implementation
 	w := &S3WAL{}
-
 	tests := []struct {
 		offset   uint64
 		expected string
@@ -469,7 +467,6 @@ func TestGetObjectKey(t *testing.T) {
 }
 
 func TestGetOffsetFromKey(t *testing.T) {
-	globalInt := 100 // Use the actual value in your implementation
 	w := &S3WAL{}
 
 	tests := []struct {
