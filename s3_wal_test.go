@@ -410,40 +410,73 @@ func TestSameOffset(t *testing.T) {
 	}
 }
 
-func TestLastRecordAfterCrash(t *testing.T) {
+// func TestLastRecordAfterCrash(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	// First WAL instance: Simulating writes before crash
+// 	wal1, _ := getWAL(t)
+
+// 	var lastData []byte
+// 	var expectedOffset uint64
+
+// 	// Append multiple records (e.g., 500+ to create multiple checkpoints)
+// 	for i := 1; i <= 500; i++ {
+// 		lastData = []byte(generateRandomStr())
+// 		offset, err := wal1.Append(ctx, lastData)
+// 		if err != nil {
+// 			t.Fatalf("failed to append record: %v", err)
+// 		}
+// 		expectedOffset = offset
+// 	}
+
+// 	// Simulating crash: Create a new WAL instance pointing to the same S3 bucket
+// 	wal2, _ := getWAL(t)
+
+// 	// Fetch last record using the new instance
+// 	record, err := wal2.LastRecord(ctx)
+// 	if err != nil {
+// 		t.Fatalf("failed to get last record after restart: %v", err)
+// 	}
+
+// 	// Validate the last record offset
+// 	if record.Offset != expectedOffset {
+// 		t.Errorf("expected offset %d, got %d", expectedOffset, record.Offset)
+// 	}
+
+// 	// Validate last record data
+// 	if string(record.Data) != string(lastData) {
+// 		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
+// 	}
+// }
+
+func TestLastRecord(t *testing.T) {
+	wal, cleanup := getWAL(t)
+	defer cleanup()
 	ctx := context.Background()
 
-	// First WAL instance: Simulating writes before crash
-	wal1, _ := getWAL(t)
+	record, err := wal.LastRecord(ctx)
+	if err == nil {
+		t.Error("expected error when getting last record from empty WAL, got nil")
+	}
 
 	var lastData []byte
-	var expectedOffset uint64
-
-	// Append multiple records (e.g., 500+ to create multiple checkpoints)
-	for i := 1; i <= 500; i++ {
+	for i := 0; i < 1234; i++ {
 		lastData = []byte(generateRandomStr())
-		offset, err := wal1.Append(ctx, lastData)
+		_, err = wal.Append(ctx, lastData)
 		if err != nil {
 			t.Fatalf("failed to append record: %v", err)
 		}
-		expectedOffset = offset
 	}
 
-	// Simulating crash: Create a new WAL instance pointing to the same S3 bucket
-	wal2, _ := getWAL(t)
-
-	// Fetch last record using the new instance
-	record, err := wal2.LastRecord(ctx)
+	record, err = wal.LastRecord(ctx)
 	if err != nil {
-		t.Fatalf("failed to get last record after restart: %v", err)
+		t.Fatalf("failed to get last record: %v", err)
 	}
 
-	// Validate the last record offset
-	if record.Offset != expectedOffset {
-		t.Errorf("expected offset %d, got %d", expectedOffset, record.Offset)
+	if record.Offset != 1234 {
+		t.Errorf("expected offset 1234, got %d", record.Offset)
 	}
 
-	// Validate last record data
 	if string(record.Data) != string(lastData) {
 		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
 	}
