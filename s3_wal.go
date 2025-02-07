@@ -97,7 +97,7 @@ func (w *S3WAL) Append(ctx context.Context, data []byte) (uint64, error) {
 
 	// Detect prefix change
 	newPrefix := (nextOffset - 1) / globalInt
-	if newPrefix != w.prefix {
+	if newPrefix != w.prefix || w.length == 0 {
 		// Write checkpoint for the new prefix
 		checkpointKey := fmt.Sprintf("/checkpoint/%03d.data", newPrefix)
 
