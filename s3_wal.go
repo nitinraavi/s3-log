@@ -26,7 +26,7 @@ func NewS3WAL(client *s3.Client, bucketName string, prefix, group uint64) *S3WAL
 		client:     client,
 		bucketName: bucketName,
 		prefix:     prefix,
-		length:     1200,
+		length:     0,
 	}
 }
 
