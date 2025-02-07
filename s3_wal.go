@@ -215,10 +215,13 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 		if err != nil {
 			return Record{}, fmt.Errorf("failed to list records: %w", err)
 		}
+		// Debug: Check how many objects are listed
+		fmt.Printf("Found %d objects in page\n", len(output.Contents))
 		for _, obj := range output.Contents {
 			println(*obj.Key)
 			offset, err := w.getOffsetFromKey(*obj.Key)
 			if err != nil {
+				fmt.Printf("Skipping invalid key: %s\n", *obj.Key)
 				continue
 			}
 			if offset > maxOffset {
