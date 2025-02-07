@@ -201,6 +201,7 @@ func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
 	if maxPrefix == 0 {
 		return Record{}, fmt.Errorf("no valid checkpoints found")
 	}
+	fmt.Printf("Found Prefix %d e\n", maxPrefix)
 
 	// Step 2: Find the highest offset in /record/maxPrefix/
 	prefixString := fmt.Sprintf("/record/%03d/", maxPrefix)
