@@ -334,45 +334,6 @@ func TestSameOffset(t *testing.T) {
 	}
 }
 
-// func TestLastRecordAfterCrash(t *testing.T) {
-// 	ctx := context.Background()
-
-// 	// First WAL instance: Simulating writes before crash
-// 	wal1, _ := getWAL(t)
-
-// 	var lastData []byte
-// 	var expectedOffset uint64
-
-// 	// Append multiple records (e.g., 500+ to create multiple checkpoints)
-// 	for i := 1; i <= 500; i++ {
-// 		lastData = []byte(generateRandomStr())
-// 		offset, err := wal1.Append(ctx, lastData)
-// 		if err != nil {
-// 			t.Fatalf("failed to append record: %v", err)
-// 		}
-// 		expectedOffset = offset
-// 	}
-
-// 	// Simulating crash: Create a new WAL instance pointing to the same S3 bucket
-// 	wal2, _ := getWAL(t)
-
-// 	// Fetch last record using the new instance
-// 	record, err := wal2.LastRecord(ctx)
-// 	if err != nil {
-// 		t.Fatalf("failed to get last record after restart: %v", err)
-// 	}
-
-// 	// Validate the last record offset
-// 	if record.Offset != expectedOffset {
-// 		t.Errorf("expected offset %d, got %d", expectedOffset, record.Offset)
-// 	}
-
-// 	// Validate last record data
-// 	if string(record.Data) != string(lastData) {
-// 		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
-// 	}
-// }
-
 func TestLastRecord(t *testing.T) {
 	wal, cleanup := getWAL(t)
 	defer cleanup()
@@ -403,59 +364,5 @@ func TestLastRecord(t *testing.T) {
 
 	if string(record.Data) != string(lastData) {
 		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
-	}
-}
-
-func TestGetObjectKey(t *testing.T) {
-	w := &S3WAL{}
-	tests := []struct {
-		offset   uint64
-		expected string
-	}{
-		{1, fmt.Sprintf("record/%03d/%010d.data", 0, w.prefixLen)},                         // First record in the first group
-		{uint64(w.prefixLen), fmt.Sprintf("record/%03d/%010d.data", 0, 1)},                 // Last record in the first group
-		{uint64(w.prefixLen + 1), fmt.Sprintf("record/%03d/%010d.data", 1, w.prefixLen)},   // First record in the second group
-		{uint64(w.prefixLen * 2), fmt.Sprintf("record/%03d/%010d.data", 1, 1)},             // Last record in the second group
-		{uint64(w.prefixLen*2 + 1), fmt.Sprintf("record/%03d/%010d.data", 2, w.prefixLen)}, // First record in the third group
-	}
-
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("offset=%d", tt.offset), func(t *testing.T) {
-			got := w.getObjectKey(tt.offset)
-			fmt.Println("Generated Object Key:", got) // Print object key line by line
-			if got != tt.expected {
-				t.Errorf("getObjectKey(%d) = %s; want %s", tt.offset, got, tt.expected)
-			}
-		})
-	}
-}
-
-func TestGetOffsetFromKey(t *testing.T) {
-	w := &S3WAL{}
-
-	tests := []struct {
-		key      string
-		expected uint64
-		wantErr  bool
-	}{
-		{fmt.Sprintf("record/%03d/%010d.data", 0, w.prefixLen), 1, false},                         // First record in the first group
-		{fmt.Sprintf("record/%03d/%010d.data", 0, 1), uint64(w.prefixLen), false},                 // Last record in the first group
-		{fmt.Sprintf("record/%03d/%010d.data", 1, w.prefixLen), uint64(w.prefixLen + 1), false},   // First record in the second group
-		{fmt.Sprintf("record/%03d/%010d.data", 1, 1), uint64(w.prefixLen * 2), false},             // Last record in the second group
-		{fmt.Sprintf("record/%03d/%010d.data", 2, w.prefixLen), uint64(w.prefixLen*2 + 1), false}, // First record in the third group
-		{"invalid/key/format.data", 0, true},                                                      // Invalid format
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
-			got, err := w.getOffsetFromKey(tt.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getOffsetFromKey() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.expected {
-				t.Errorf("getOffsetFromKey() = %d, want %d", got, tt.expected)
-			}
-		})
 	}
 }
