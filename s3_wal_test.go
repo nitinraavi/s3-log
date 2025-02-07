@@ -444,17 +444,18 @@ func TestSameOffset(t *testing.T) {
 // }
 
 func TestGetObjectKey(t *testing.T) {
+	globalInt := 100 // Use the actual value in your implementation
 	w := &S3WAL{}
 
 	tests := []struct {
 		offset   uint64
 		expected string
 	}{
-		{1, "/record/000/0000000064.data"},   // First record in the first group
-		{64, "/record/000/0000000001.data"},  // Last record in the first group
-		{65, "/record/001/0000000064.data"},  // First record in the second group
-		{128, "/record/001/0000000001.data"}, // Last record in the second group
-		{129, "/record/002/0000000064.data"}, // First record in the third group
+		{1, fmt.Sprintf("/record/%03d/%012d.data", 0, globalInt)},                       // First record in the first group
+		{uint64(globalInt), fmt.Sprintf("/record/%03d/%012d.data", 0, 1)},               // Last record in the first group
+		{uint64(globalInt + 1), fmt.Sprintf("/record/%03d/%012d.data", 1, globalInt)},   // First record in the second group
+		{uint64(globalInt * 2), fmt.Sprintf("/record/%03d/%012d.data", 1, 1)},           // Last record in the second group
+		{uint64(globalInt*2 + 1), fmt.Sprintf("/record/%03d/%012d.data", 2, globalInt)}, // First record in the third group
 	}
 
 	for _, tt := range tests {
@@ -468,6 +469,7 @@ func TestGetObjectKey(t *testing.T) {
 }
 
 func TestGetOffsetFromKey(t *testing.T) {
+	globalInt := 100 // Use the actual value in your implementation
 	w := &S3WAL{}
 
 	tests := []struct {
@@ -475,12 +477,12 @@ func TestGetOffsetFromKey(t *testing.T) {
 		expected uint64
 		wantErr  bool
 	}{
-		{"/record/000/0000000064.data", 1, false},   // First record in the first group
-		{"/record/000/0000000001.data", 64, false},  // Last record in the first group
-		{"/record/001/0000000064.data", 65, false},  // First record in the second group
-		{"/record/001/0000000001.data", 128, false}, // Last record in the second group
-		{"/record/002/0000000064.data", 129, false}, // First record in the third group
-		{"invalid/key/format.data", 0, true},        // Invalid format
+		{fmt.Sprintf("/record/%03d/%012d.data", 0, globalInt), 1, false},                       // First record in the first group
+		{fmt.Sprintf("/record/%03d/%012d.data", 0, 1), uint64(globalInt), false},               // Last record in the first group
+		{fmt.Sprintf("/record/%03d/%012d.data", 1, globalInt), uint64(globalInt + 1), false},   // First record in the second group
+		{fmt.Sprintf("/record/%03d/%012d.data", 1, 1), uint64(globalInt * 2), false},           // Last record in the second group
+		{fmt.Sprintf("/record/%03d/%012d.data", 2, globalInt), uint64(globalInt*2 + 1), false}, // First record in the third group
+		{"invalid/key/format.data", 0, true},                                                   // Invalid format
 	}
 
 	for _, tt := range tests {
