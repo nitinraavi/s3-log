@@ -449,7 +449,7 @@ func TestGetObjectKey(t *testing.T) {
 		offset   uint64
 		expected string
 	}{
-		{1, fmt.Sprintf("/record/%03d/%012d.data", 0, globalInt)},                       // First record in the first group
+		{1, fmt.Sprintf("/record/%03d/%010d.data", 0, globalInt)},                       // First record in the first group
 		{uint64(globalInt), fmt.Sprintf("/record/%03d/%010d.data", 0, 1)},               // Last record in the first group
 		{uint64(globalInt + 1), fmt.Sprintf("/record/%03d/%010d.data", 1, globalInt)},   // First record in the second group
 		{uint64(globalInt * 2), fmt.Sprintf("/record/%03d/%010d.data", 1, 1)},           // Last record in the second group
