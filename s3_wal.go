@@ -30,7 +30,7 @@ func NewS3WAL(client *s3.Client, bucketName string, prefix, group uint64) *S3WAL
 	}
 }
 
-var globalInt uint64 = 64
+var globalInt uint64 = 20
 
 // func (w *S3WAL) getObjectKey(offset uint64) string {
 // 	fmt.Println(w.prefix + "/" + fmt.Sprintf("%020d", offset))
