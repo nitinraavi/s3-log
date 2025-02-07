@@ -171,33 +171,67 @@ func (w *S3WAL) Read(ctx context.Context, offset uint64) (Record, error) {
 }
 
 func (w *S3WAL) LastRecord(ctx context.Context) (Record, error) {
-	prefixString := fmt.Sprintf("/record/%03d/", w.prefix)
+	var maxPrefix int
+	var maxOffset uint64
+
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(w.bucketName),
-		Prefix: aws.String(prefixString + "/"),
+		Prefix: aws.String("/checkpoint/"),
 	}
-	paginator := s3.NewListObjectsV2Paginator(w.client, input)
 
-	var maxOffset uint64 = 0
+	paginator := s3.NewListObjectsV2Paginator(w.client, input)
 	for paginator.HasMorePages() {
 		output, err := paginator.NextPage(ctx)
 		if err != nil {
-			return Record{}, fmt.Errorf("failed to list objects from S3: %w", err)
+			return Record{}, fmt.Errorf("failed to list checkpoints: %w", err)
 		}
 		for _, obj := range output.Contents {
 			key := *obj.Key
-			offset, err := w.getOffsetFromKey(key)
+			var prefix int
+			_, err := fmt.Sscanf(key, "/checkpoint/%03d", &prefix)
 			if err != nil {
-				return Record{}, fmt.Errorf("failed to parse offset from key: %w", err)
+				continue // Ignore invalid keys
+			}
+			if prefix > maxPrefix {
+				maxPrefix = prefix
+			}
+		}
+	}
+
+	if maxPrefix == 0 {
+		return Record{}, fmt.Errorf("no valid checkpoints found")
+	}
+	// Step 2: Find the highest offset in /record/maxPrefix/
+	prefixString := fmt.Sprintf("/record/%03d/", maxPrefix)
+	input = &s3.ListObjectsV2Input{
+		Bucket: aws.String(w.bucketName),
+		Prefix: aws.String(prefixString),
+	}
+	paginator = s3.NewListObjectsV2Paginator(w.client, input)
+
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return Record{}, fmt.Errorf("failed to list records: %w", err)
+		}
+		for _, obj := range output.Contents {
+			offset, err := w.getOffsetFromKey(*obj.Key)
+			if err != nil {
+				continue
 			}
 			if offset > maxOffset {
 				maxOffset = offset
 			}
 		}
 	}
+
 	if maxOffset == 0 {
-		return Record{}, fmt.Errorf("WAL is empty")
+		return Record{}, fmt.Errorf("no records found in last checkpoint")
 	}
+
+	// Restore WAL state
 	w.length = maxOffset
+
+	// Read and return the last record
 	return w.Read(ctx, maxOffset)
 }

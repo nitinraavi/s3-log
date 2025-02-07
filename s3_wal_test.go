@@ -410,38 +410,44 @@ func TestSameOffset(t *testing.T) {
 	}
 }
 
-// func TestLastRecord(t *testing.T) {
-// 	wal, cleanup := getWAL(t)
-// 	defer cleanup()
-// 	ctx := context.Background()
+func TestLastRecordAfterCrash(t *testing.T) {
+	ctx := context.Background()
 
-// 	record, err := wal.LastRecord(ctx)
-// 	if err == nil {
-// 		t.Error("expected error when getting last record from empty WAL, got nil")
-// 	}
+	// First WAL instance: Simulating writes before crash
+	wal1, _ := getWAL(t)
 
-// 	var lastData []byte
-// 	for i := 0; i < 1234; i++ {
-// 		lastData = []byte(generateRandomStr())
-// 		_, err = wal.Append(ctx, lastData)
-// 		if err != nil {
-// 			t.Fatalf("failed to append record: %v", err)
-// 		}
-// 	}
+	var lastData []byte
+	var expectedOffset uint64
 
-// 	record, err = wal.LastRecord(ctx)
-// 	if err != nil {
-// 		t.Fatalf("failed to get last record: %v", err)
-// 	}
+	// Append multiple records (e.g., 500+ to create multiple checkpoints)
+	for i := 1; i <= 500; i++ {
+		lastData = []byte(generateRandomStr())
+		offset, err := wal1.Append(ctx, lastData)
+		if err != nil {
+			t.Fatalf("failed to append record: %v", err)
+		}
+		expectedOffset = offset
+	}
 
-// 	if record.Offset != 1234 {
-// 		t.Errorf("expected offset 1234, got %d", record.Offset)
-// 	}
+	// Simulating crash: Create a new WAL instance pointing to the same S3 bucket
+	wal2, _ := getWAL(t)
 
-// 	if string(record.Data) != string(lastData) {
-// 		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
-// 	}
-// }
+	// Fetch last record using the new instance
+	record, err := wal2.LastRecord(ctx)
+	if err != nil {
+		t.Fatalf("failed to get last record after restart: %v", err)
+	}
+
+	// Validate the last record offset
+	if record.Offset != expectedOffset {
+		t.Errorf("expected offset %d, got %d", expectedOffset, record.Offset)
+	}
+
+	// Validate last record data
+	if string(record.Data) != string(lastData) {
+		t.Errorf("data mismatch: expected %q, got %q", lastData, record.Data)
+	}
+}
 
 func TestGetObjectKey(t *testing.T) {
 	w := &S3WAL{}
