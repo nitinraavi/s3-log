@@ -49,7 +49,6 @@ func setupBucket(client *s3.Client, bucketName string) error {
 func emptyBucket(ctx context.Context, client *s3.Client, bucketName string) error {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
-		// Prefix: aws.String(prefix),
 	}
 	paginator := s3.NewListObjectsV2Paginator(client, input)
 	for paginator.HasMorePages() {
