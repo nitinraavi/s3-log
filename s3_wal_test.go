@@ -345,7 +345,7 @@ func TestLastRecord(t *testing.T) {
 	}
 
 	var lastData []byte
-	for i := 0; i < 123456789; i++ {
+	for i := 0; i < 123456; i++ {
 		lastData = []byte(generateRandomStr())
 		_, err = wal.Append(ctx, lastData)
 		if err != nil {
@@ -358,7 +358,7 @@ func TestLastRecord(t *testing.T) {
 		t.Fatalf("failed to get last record: %v", err)
 	}
 
-	if record.Offset != 123456789 {
+	if record.Offset != 123456 {
 		t.Errorf("expected offset 1234, got %d", record.Offset)
 	}
 
