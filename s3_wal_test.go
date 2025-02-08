@@ -102,7 +102,6 @@ func getWAL(t *testing.T) (*S3WAL, func()) {
 			t.Logf("failed to delete bucket during cleanup: %v", err)
 		}
 	}
-	// prefixUint64, _ := strconv.ParseUint(prefix, 10, 64)
 	return NewS3WAL(client, bucketName, prefix, prefixLen), cleanup
 }
 
