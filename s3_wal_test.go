@@ -188,7 +188,6 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 		}
 		dataLen := int(nBig.Int64()) + 1
 		data[i] = make([]byte, dataLen)
-
 		_, err = rand.Read(data[i])
 		if err != nil {
 			t.Fatalf("failed to generate random data for index %d: %v", i, err)
@@ -199,7 +198,6 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 	offsets := make([]uint64, len(data))
 	checkpoints := make(map[uint64]bool)
 	var mu sync.Mutex
-
 	for i, data := range data {
 		wg.Add(1)
 		go func(i int, data []byte) {
@@ -230,7 +228,6 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 			mu.Unlock()
 		}(i, data)
 	}
-
 	wg.Wait()
 
 	// Now read and verify data
@@ -243,7 +240,6 @@ func TestAppendMultipleConcurrency(t *testing.T) {
 		if record.Offset != offset {
 			t.Errorf("offset mismatch: expected %d, got %d", offset, record.Offset)
 		}
-
 		if !bytes.Equal(record.Data, data[i]) {
 			t.Errorf("data mismatch at offset %d", offset)
 		}
